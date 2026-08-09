@@ -12,9 +12,11 @@ Spicetify back for you. You don't have to do anything.
 ## What you get
 
 - **Puts your theme back automatically** — no commands, no reinstalling
-- **Never interrupts your music** — if Spotify is open, it waits until you close it
+- **Sorts it out every time you log in**, and restarts Spotify minimised so the theme
+  actually shows up
+- **Won't interrupt your music** — once you're up and running, it waits until you close
+  Spotify before fixing anything
 - **Works quietly in the background** — a small coloured dot in your tray is all you see
-- **Starts with your PC** so it's always watching
 - **One-click fix** any time, from the tray menu
 
 The dot tells you what's going on:
@@ -80,6 +82,10 @@ Your Spotify and Spicetify are left exactly as they are — it only removes this
   `spicetify upgrade` usually sorts it.
 - **Using Spotify from the Microsoft Store?** Spicetify doesn't support that version.
   Install Spotify from [spotify.com](https://www.spotify.com/download/windows/) instead.
+- **Antivirus grumbling about `launcher.vbs`?** Some scanners are suspicious of any
+  `.vbs` file. It's four lines and you can read the whole thing — it just starts the tray
+  app without leaving a black console window on screen, which is the only reliable way to
+  do that on Windows 11.
 
 ## For the curious
 
