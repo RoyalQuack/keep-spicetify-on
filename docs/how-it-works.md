@@ -113,10 +113,27 @@ so any error stays readable instead of vanishing with the window.
 | --- | --- |
 | `checkIntervalSeconds` | Periodic health check. The file watcher catches updates within seconds anyway, so this is a safety net. |
 | `repairPolicy` | `WaitForSpotifyExit` (default), `RepairImmediately`, or `AskFirst`. |
+| `repairOnStartup` | Re-apply unconditionally when the tray starts, instead of trusting the health check. See below. |
 | `blockSpotifyUpdates` | Mirrors the tray toggle. |
 | `notifications` | Tray balloon notifications. |
 
 Restart the tray app after editing by hand.
+
+## Why startup always repairs
+
+A running Spotify client loads its UI bundle into memory once, at launch. Patching the
+files underneath it changes nothing on screen until Spotify is restarted.
+
+That matters at logon, because Spotify auto-starts on many setups
+(`Spotify.exe --autostart --minimized`). The sequence is: Spotify starts and loads the
+unpatched UI, then the tray starts 30 seconds later and repairs the files. Detection
+correctly reports Healthy and the icon goes green, while the client on screen still
+shows no theme. The icon isn't wrong; it just can't see inside Spotify's process.
+
+So `repairOnStartup` re-applies unconditionally rather than trusting the check, and if
+Spotify was already running it is restarted minimised afterwards so it actually loads
+the restored theme. This only applies at startup — during normal operation the
+`WaitForSpotifyExit` policy still refuses to interrupt playback.
 
 ## Running without the tray
 

@@ -284,7 +284,10 @@ function Set-MenuBusy {
 }
 
 function Start-KsoRepair {
-    param([switch] $Force)
+    param(
+        [switch] $Force,
+        [switch] $Startup
+    )
 
     if ($script:RepairInProgress) {
         Write-KsoLog 'Repair already in progress; ignoring the new request.'
@@ -305,10 +308,10 @@ function Start-KsoRepair {
     $script:RepairPs = [powershell]::Create()
     $script:RepairPs.Runspace = $script:RepairRunspace
     $null = $script:RepairPs.AddScript({
-        param($CorePath, $ForceFlag)
+        param($CorePath, $ForceFlag, $StartupFlag)
         . $CorePath
-        Invoke-SpicetifyRepairPreservingState -Force:$ForceFlag
-    }).AddArgument($corePath).AddArgument([bool]$Force)
+        Invoke-SpicetifyRepairPreservingState -Force:$ForceFlag -RestartSpotifyMinimised:$StartupFlag
+    }).AddArgument($corePath).AddArgument([bool]$Force).AddArgument([bool]$Startup)
 
     $script:RepairHandle = $script:RepairPs.BeginInvoke()
     Write-KsoLog 'Repair dispatched to a background runspace.'
@@ -508,7 +511,13 @@ $startupTimer = New-Object System.Windows.Forms.Timer
 $startupTimer.Interval = 400
 $startupTimer.Add_Tick({
     $startupTimer.Stop()
-    Invoke-KsoCheck | Out-Null
+
+    if ($script:Config.repairOnStartup) {
+        Write-KsoLog 'Startup repair: re-applying Spicetify unconditionally.'
+        Start-KsoRepair -Force -Startup
+    } else {
+        Invoke-KsoCheck | Out-Null
+    }
 })
 $startupTimer.Start()
 

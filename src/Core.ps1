@@ -17,6 +17,7 @@ function Get-KsoDefaultConfig {
     [pscustomobject]@{
         checkIntervalSeconds = 300
         repairPolicy         = 'WaitForSpotifyExit'
+        repairOnStartup      = $true
         blockSpotifyUpdates  = $false
         notifications        = $true
     }
@@ -57,7 +58,17 @@ function Write-KsoLog {
     try {
         Initialize-KsoDataDir | Out-Null
         $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-        Add-Content -LiteralPath $script:KsoLogPath -Value "[$stamp] [$Level] $Message" -Encoding utf8
+        $line = "[$stamp] [$Level] $Message" + [Environment]::NewLine
+        $encoding = New-Object System.Text.UTF8Encoding($false)
+
+        for ($attempt = 0; $attempt -lt 5; $attempt++) {
+            try {
+                [System.IO.File]::AppendAllText($script:KsoLogPath, $line, $encoding)
+                break
+            } catch {
+                Start-Sleep -Milliseconds 120
+            }
+        }
 
         $item = Get-Item -LiteralPath $script:KsoLogPath -ErrorAction SilentlyContinue
         if ($item -and $item.Length -gt 512KB) {
@@ -186,6 +197,58 @@ function Get-XpuiMarkerState {
         }
     }
     $result
+}
+
+function Hide-SpotifyWindow {
+    if (-not ('Kso.WindowUtil' -as [type])) {
+        try {
+            Add-Type -Namespace Kso -Name WindowUtil -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+'@ -ErrorAction Stop
+        } catch {
+            return
+        }
+    }
+
+    $deadline = (Get-Date).AddSeconds(20)
+    $hidden = $false
+
+    while ((Get-Date) -lt $deadline -and -not $hidden) {
+        foreach ($p in (Get-SpotifyProcess)) {
+            try {
+                $p.Refresh()
+                if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
+                    [Kso.WindowUtil]::ShowWindow($p.MainWindowHandle, 6) | Out-Null
+                    $hidden = $true
+                }
+            } catch { }
+        }
+        if (-not $hidden) { Start-Sleep -Milliseconds 700 }
+    }
+
+    if ($hidden) { Write-KsoLog 'Minimised the Spotify window opened by the repair.' }
+    $hidden
+}
+
+function Restart-SpotifyMinimised {
+    $exe = $null
+    $root = Get-SpotifyRoot
+    if ($root) { $exe = Join-Path $root 'Spotify.exe' }
+    if (-not $exe -or -not (Test-Path -LiteralPath $exe)) { return $false }
+
+    foreach ($p in (Get-SpotifyProcess)) {
+        try { $p.CloseMainWindow() | Out-Null } catch { }
+    }
+    Start-Sleep -Milliseconds 1200
+    foreach ($p in (Get-SpotifyProcess)) {
+        try { $p.Kill() } catch { }
+    }
+    Start-Sleep -Milliseconds 1200
+
+    Start-Process -FilePath $exe -ArgumentList '--minimized' -WindowStyle Minimized
+    Write-KsoLog 'Restarted Spotify so it loads the restored theme.'
+    Hide-SpotifyWindow | Out-Null
+    $true
 }
 
 function Test-SpotifyArchiveRestored {
@@ -370,10 +433,20 @@ function Invoke-SpicetifyRepair {
 }
 
 function Invoke-SpicetifyRepairPreservingState {
-    param([switch] $Force)
+    param(
+        [switch] $Force,
+        [switch] $RestartSpotifyMinimised
+    )
 
     $wasRunning = [bool](Get-SpotifyProcess)
     $result = Invoke-SpicetifyRepair -Force:$Force
+
+    if ($RestartSpotifyMinimised -and $wasRunning) {
+        if ($result.Status.State -eq 'Healthy') {
+            Restart-SpotifyMinimised | Out-Null
+        }
+        return $result
+    }
 
     if (-not $wasRunning -and (Get-SpotifyProcess)) {
         Write-KsoLog 'Closing the Spotify window Spicetify opened (it was not running before the repair).'
