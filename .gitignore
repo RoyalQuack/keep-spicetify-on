@@ -1,0 +1,11 @@
+# Runtime data lives in %LOCALAPPDATA%\KeepSpicetifyOn, not in the repo.
+# These patterns just catch stray copies made while debugging.
+*.log
+config.json
+
+# Editors / OS
+.vs/
+.vscode/
+*.swp
+Thumbs.db
+desktop.ini
