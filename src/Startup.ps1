@@ -24,16 +24,23 @@ function Register-KsoStartupTask {
         throw "Tray script not found at $ScriptPath"
     }
 
-    $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $arguments = @(
-        '-NoProfile'
-        '-NonInteractive'
-        '-WindowStyle Hidden'
-        '-ExecutionPolicy Bypass'
-        "-File `"$ScriptPath`""
-    ) -join ' '
+    $launcher = Join-Path (Split-Path -Parent $ScriptPath) 'launcher.vbs'
 
-    $action = New-ScheduledTaskAction -Execute $psExe -Argument $arguments
+    if (Test-Path -LiteralPath $launcher) {
+        $exe = Join-Path $env:SystemRoot 'System32\wscript.exe'
+        $arguments = "//nologo `"$launcher`""
+    } else {
+        $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $arguments = @(
+            '-NoProfile'
+            '-NonInteractive'
+            '-WindowStyle Hidden'
+            '-ExecutionPolicy Bypass'
+            "-File `"$ScriptPath`""
+        ) -join ' '
+    }
+
+    $action = New-ScheduledTaskAction -Execute $exe -Argument $arguments
 
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
     $trigger.Delay = 'PT30S'

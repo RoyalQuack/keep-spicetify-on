@@ -78,11 +78,18 @@ if ($status.State -eq 'Healthy') {
 
 if (-not $NoStart) {
     $tray = Join-Path $PSScriptRoot 'src\KeepSpicetifyOn.ps1'
-    $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    Start-Process -FilePath $psExe -WindowStyle Hidden -ArgumentList @(
-        '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
-        '-ExecutionPolicy', 'Bypass', '-File', "`"$tray`""
-    )
+    $launcher = Join-Path $PSScriptRoot 'src\launcher.vbs'
+
+    if (Test-Path -LiteralPath $launcher) {
+        Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\wscript.exe') `
+            -ArgumentList @('//nologo', "`"$launcher`"")
+    } else {
+        $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        Start-Process -FilePath $psExe -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
+            '-ExecutionPolicy', 'Bypass', '-File', "`"$tray`""
+        )
+    }
     Write-Host ''
     Write-Host '  [ok] Tray app started - look for the dot in your system tray.' -ForegroundColor Green
     Write-Host '       Green = Spicetify on, red = off, grey = paused.'

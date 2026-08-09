@@ -70,6 +70,32 @@ Also: `Core.ps1` and `Startup.ps1` deliberately don't call `Set-StrictMode`. It'
 scope-based, so a dot-sourced file would impose it on the caller's shell. Each entry
 point sets its own.
 
+## Why the tray is launched from a .vbs
+
+Task Scheduler can only launch an executable, and launching `powershell.exe` directly
+leaves an empty black window on screen. On Windows 11 the default terminal is Windows
+Terminal, which **ignores `-WindowStyle Hidden`** and the classic
+`ShowWindow(GetConsoleWindow(), SW_HIDE)` trick — the window it creates is a
+`CASCADIA_HOSTING_WINDOW_CLASS` owned by `WindowsTerminal.exe`, not a console window the
+script can hide. Closing that stray window kills the tray app.
+
+`FreeConsole()` is not the answer either: Terminal keeps the window after the client
+detaches, and PowerShell's host then throws `The handle is invalid` the next time it
+touches the console.
+
+`wscript.exe` has no console of its own, and `WScript.Shell.Run(cmd, 0, False)` creates
+the PowerShell process hidden, so no console is ever allocated. That's what
+`launcher.vbs` does, and it's what both the logon task and the installer use. The code
+falls back to launching `powershell.exe` directly if the .vbs is missing.
+
+## Why installing goes through a .bat
+
+`.ps1` files can't be launched by double-click on a stock Windows machine: the default
+execution policy is `Restricted`, and files extracted from a downloaded ZIP additionally
+carry Mark of the Web. `.bat` files are subject to neither. `Install.bat` unblocks the
+extracted scripts, runs PowerShell with `-ExecutionPolicy Bypass`, and pauses at the end
+so any error stays readable instead of vanishing with the window.
+
 ## Configuration
 
 `%LOCALAPPDATA%\KeepSpicetifyOn\config.json`:
@@ -112,6 +138,8 @@ to fetch a fresh CSS map. It runs on a background runspace so the tray stays res
 | `src/Core.ps1` | Detection and repair engine. No UI. |
 | `src/KeepSpicetifyOn.ps1` | Tray app; also `-Status` / `-Once` headless modes. |
 | `src/Startup.ps1` | Logon-task registration, shared by the installer and the tray. |
+| `src/launcher.vbs` | Starts the tray with no console window. See below. |
+| `Install.bat` / `Uninstall.bat` | Double-clickable entry points that get around execution policy. |
 | `install.ps1` / `uninstall.ps1` | Setup and removal. |
 | `tests/Test-Core.ps1` | Test suite, no Pester needed. |
 
