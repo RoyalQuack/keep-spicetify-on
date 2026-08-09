@@ -1,3 +1,4 @@
+$script:KsoSpicetifyVersion = $null
 $script:KsoDataDir = Join-Path $env:LOCALAPPDATA 'KeepSpicetifyOn'
 $script:KsoLogPath = Join-Path $script:KsoDataDir 'log.txt'
 $script:KsoConfigPath = Join-Path $script:KsoDataDir 'config.json'
@@ -97,6 +98,38 @@ function Resolve-SpicetifyExe {
 
 function Get-SpicetifyConfigPath {
     Join-Path $env:APPDATA 'spicetify\config-xpui.ini'
+}
+
+function Get-SpicetifyVersion {
+    <#
+        Cached for the life of the process: spicetify.exe is only reinstalled by
+        hand, and the status check runs often enough that spawning it every time
+        would be wasteful.
+    #>
+    if ($script:KsoSpicetifyVersion) { return $script:KsoSpicetifyVersion }
+
+    $exe = Resolve-SpicetifyExe
+    if ($exe) {
+        $previous = $ErrorActionPreference
+        try {
+            # spicetify decorates its output with ANSI colour codes and writes
+            # some of it to stderr, so merge the streams and pick the version out
+            # of the text rather than trusting the exact shape.
+            $ErrorActionPreference = 'Continue'
+            $raw = (& $exe '-v' 2>&1 | Out-String)
+            if ($raw -match '(\d+\.\d+\.\d+)') { $script:KsoSpicetifyVersion = $Matches[1] }
+        } catch {
+        } finally {
+            $ErrorActionPreference = $previous
+        }
+    }
+
+    if (-not $script:KsoSpicetifyVersion) {
+        $fromConfig = Read-IniSectionValue -Path (Get-SpicetifyConfigPath) -Section 'Backup' -Key 'with'
+        if ($fromConfig) { $script:KsoSpicetifyVersion = $fromConfig.Trim() }
+    }
+
+    $script:KsoSpicetifyVersion
 }
 
 function Read-IniSectionValue {
@@ -272,6 +305,7 @@ function Get-SpicetifyStatus {
         SpicetifyExe    = Resolve-SpicetifyExe
         SpotifyRoot     = $null
         SpotifyVersion  = $null
+        SpicetifyVersion = $null
         BackupVersion   = $null
         MarkerSource    = 'None'
         Patched         = $false
@@ -286,6 +320,8 @@ function Get-SpicetifyStatus {
         $status.Reason = 'spicetify.exe was not found on PATH or in the usual install locations.'
         return $status
     }
+
+    $status.SpicetifyVersion = Get-SpicetifyVersion
 
     $status.SpotifyRoot = Get-SpotifyRoot
     if (-not $status.SpotifyRoot) {

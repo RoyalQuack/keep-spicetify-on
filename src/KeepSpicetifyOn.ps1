@@ -26,6 +26,7 @@ function Write-StatusToHost {
     Write-Host "  State           : " -NoNewline; Write-Host $S.State -ForegroundColor $colour
     Write-Host "  Reason          : $($S.Reason)"
     Write-Host "  Spotify version : $($S.SpotifyVersion)"
+    Write-Host "  Spicetify ver.  : $($S.SpicetifyVersion)"
     Write-Host "  Patched against : $($S.BackupVersion)"
     Write-Host "  UI bundle source: $($S.MarkerSource)"
     Write-Host "  Marker present  : $($S.Patched)"
@@ -228,9 +229,12 @@ function Update-TrayUi {
         $miStatus.Text += ' (paused)'
     }
 
-    $detail = if ($S.SpotifyVersion) { "Spotify $($S.SpotifyVersion)" } else { $S.Reason }
-    if ($script:LocalVersion) { $detail += "   -   KSO v$($script:LocalVersion)" }
-    $miDetail.Text = $detail
+    $parts = @()
+    if ($script:LocalVersion) { $parts += "KSO v$($script:LocalVersion)" }
+    if ($S.SpotifyVersion) { $parts += "Spotify $($S.SpotifyVersion)" }
+    if ($S.SpicetifyVersion) { $parts += "Spicetify $($S.SpicetifyVersion)" }
+
+    $miDetail.Text = if ($parts.Count) { $parts -join '   |   ' } else { $S.Reason }
 
     $tip = "KeepSpicetifyOn - $($miStatus.Text)"
     if ($tip.Length -gt 63) { $tip = $tip.Substring(0, 63) }

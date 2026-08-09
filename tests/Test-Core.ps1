@@ -82,6 +82,7 @@ Assert-True (-not [string]::IsNullOrWhiteSpace($status.Reason)) 'status always e
 if ($status.State -in @('Healthy', 'NeedsRepair')) {
     Assert-True (Test-Path -LiteralPath $status.SpotifyRoot) 'resolved Spotify root exists'
     Assert-True (-not [string]::IsNullOrWhiteSpace($status.SpotifyVersion)) 'read a Spotify version'
+    Assert-True ($status.SpicetifyVersion -match '^\d+\.\d+') "read a Spicetify version ($($status.SpicetifyVersion))"
     Assert-Equal 'Folder' $status.MarkerSource 'Spicetify v2 serves the UI from the Apps\xpui folder'
 
     $spa = Join-Path $status.SpotifyRoot 'Apps\xpui.spa'
