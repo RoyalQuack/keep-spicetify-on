@@ -7,6 +7,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Get-ChildItem -LiteralPath $PSScriptRoot -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue |
+    Unblock-File -ErrorAction SilentlyContinue
+
 . (Join-Path $PSScriptRoot 'src\Core.ps1')
 . (Join-Path $PSScriptRoot 'src\Startup.ps1')
 
@@ -87,5 +90,5 @@ if (-not $NoStart) {
 
 Write-Host ''
 Write-Host "  Log: $(Get-KsoLogPath)" -ForegroundColor DarkGray
-Write-Host '  Uninstall: powershell -ExecutionPolicy Bypass -File .\uninstall.ps1' -ForegroundColor DarkGray
+Write-Host '  To remove it later: double-click Uninstall.bat' -ForegroundColor DarkGray
 Write-Host ''

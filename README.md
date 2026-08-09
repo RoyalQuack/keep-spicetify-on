@@ -32,18 +32,18 @@ it yet, follow [Spicetify's guide](https://spicetify.app/docs/getting-started) f
 1. Click the green **Code** button at the top of this page, then **Download ZIP**.
 2. Right-click the downloaded file and choose **Extract All**.
 3. Open the folder you just extracted.
-4. Right-click **`install.ps1`** and choose **Run with PowerShell**.
+4. Double-click **`Install.bat`**.
 
-That's it. A window will pop up for a few seconds, fix your theme if it's currently
-broken, and then disappear. Look for the new dot in your system tray (you may need to
-click the little **^** arrow to see hidden icons).
+That's it. A black window appears for a few seconds while it sets everything up, then
+tells you to press a key to close. Look for the new dot in your system tray — you may
+need to click the little **^** arrow near the clock to see hidden icons.
 
-**If Windows blocks it**, open PowerShell and paste this instead, replacing the path
-with wherever you extracted the folder:
+If Windows shows a **"Windows protected your PC"** warning, that's just because the file
+came from the internet. Click **More info**, then **Run anyway**.
 
-```bash
-powershell -ExecutionPolicy Bypass -File "C:\Users\You\Downloads\keep-spicetify-on\install.ps1"
-```
+> **Don't** right-click `install.ps1` and pick "Run with PowerShell" — Windows blocks
+> PowerShell scripts by default, so the window will flash and close without doing
+> anything. `Install.bat` gets around that for you.
 
 ## Using it
 
@@ -67,7 +67,7 @@ and just let the app fix things automatically.
 
 ## Uninstall
 
-Right-click **`uninstall.ps1`** and choose **Run with PowerShell**.
+Double-click **`Uninstall.bat`** in the same folder.
 
 Your Spotify and Spicetify are left exactly as they are — it only removes this app.
 
