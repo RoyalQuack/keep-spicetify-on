@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'Core.ps1')
 . (Join-Path $PSScriptRoot 'Startup.ps1')
+. (Join-Path $PSScriptRoot 'Update.ps1')
 
 function Write-StatusToHost {
     param($S)
@@ -18,8 +19,9 @@ function Write-StatusToHost {
         'NeedsRepair' { 'Yellow' }
         default       { 'Red' }
     }
+    $v = Get-KsoLocalVersion
     Write-Host ''
-    Write-Host '  KeepSpicetifyOn' -ForegroundColor Cyan
+    Write-Host "  KeepSpicetifyOn $(if ($v) { "v$v" })" -ForegroundColor Cyan
     Write-Host '  ---------------'
     Write-Host "  State           : " -NoNewline; Write-Host $S.State -ForegroundColor $colour
     Write-Host "  Reason          : $($S.Reason)"
@@ -83,6 +85,14 @@ $script:RepairInProgress = $false
 $script:RepairRunspace = $null
 $script:RepairPs = $null
 $script:RepairHandle = $null
+
+$script:UpdateInProgress = $false
+$script:UpdateRunspace = $null
+$script:UpdatePs = $null
+$script:UpdateHandle = $null
+$script:UpdateManual = $false
+$script:LastUpdateCheck = [datetime]::MinValue
+$script:LocalVersion = Get-KsoLocalVersion
 
 $script:Shared = [hashtable]::Synchronized(@{ DirtyAt = [datetime]::MinValue })
 
@@ -165,6 +175,13 @@ $menu.Items.Add($miNotify) | Out-Null
 
 $menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
 
+$miUpdate = New-Object System.Windows.Forms.ToolStripMenuItem 'Check for updates'
+$menu.Items.Add($miUpdate) | Out-Null
+
+$miAutoUpdate = New-Object System.Windows.Forms.ToolStripMenuItem 'Update automatically'
+$miAutoUpdate.CheckOnClick = $false
+$menu.Items.Add($miAutoUpdate) | Out-Null
+
 $miLog = New-Object System.Windows.Forms.ToolStripMenuItem 'Open log'
 $menu.Items.Add($miLog) | Out-Null
 
@@ -212,6 +229,7 @@ function Update-TrayUi {
     }
 
     $detail = if ($S.SpotifyVersion) { "Spotify $($S.SpotifyVersion)" } else { $S.Reason }
+    if ($script:LocalVersion) { $detail += "   -   KSO v$($script:LocalVersion)" }
     $miDetail.Text = $detail
 
     $tip = "KeepSpicetifyOn - $($miStatus.Text)"
@@ -227,6 +245,96 @@ function Update-TrayUi {
     $miStartup.Checked = Test-KsoStartupTask
     $miBlock.Checked = [bool]$script:Config.blockSpotifyUpdates
     $miNotify.Checked = [bool]$script:Config.notifications
+    $miAutoUpdate.Checked = [bool]$script:Config.autoUpdate
+}
+
+function Start-KsoUpdateCheck {
+    <#
+        Checks GitHub for a newer VERSION and, when appropriate, installs it.
+        Runs on a background runspace so a slow or dead network cannot freeze
+        the tray.
+    #>
+    param([switch] $Manual)
+
+    if ($script:UpdateInProgress -or $script:RepairInProgress) { return }
+
+    $script:UpdateInProgress = $true
+    $script:UpdateManual = [bool]$Manual
+    $script:LastUpdateCheck = Get-Date
+    $miUpdate.Enabled = $false
+
+    $install = ([bool]$script:Config.autoUpdate) -or [bool]$Manual
+    $updatePath = Join-Path $PSScriptRoot 'Update.ps1'
+
+    $script:UpdateRunspace = [runspacefactory]::CreateRunspace()
+    $script:UpdateRunspace.Open()
+    $script:UpdatePs = [powershell]::Create()
+    $script:UpdatePs.Runspace = $script:UpdateRunspace
+    $null = $script:UpdatePs.AddScript({
+        param($UpdatePath, $Install)
+        . $UpdatePath
+        $status = Get-KsoUpdateStatus
+        if ($status.Available -and $Install) {
+            $result = Invoke-KsoSelfUpdate
+            return [pscustomobject]@{ Kind = 'Install'; Status = $status; Result = $result }
+        }
+        [pscustomobject]@{ Kind = 'Check'; Status = $status; Result = $null }
+    }).AddArgument($updatePath).AddArgument($install)
+
+    $script:UpdateHandle = $script:UpdatePs.BeginInvoke()
+}
+
+function Complete-KsoUpdateCheck {
+    $outcome = $null
+    try {
+        $output = $script:UpdatePs.EndInvoke($script:UpdateHandle)
+        $outcome = $output | Where-Object { $_ -and $_.PSObject.Properties.Name -contains 'Kind' } | Select-Object -Last 1
+    } catch {
+        Write-KsoLog "Update check failed: $($_.Exception.Message)" 'ERROR'
+    } finally {
+        if ($script:UpdatePs) { $script:UpdatePs.Dispose() }
+        if ($script:UpdateRunspace) { $script:UpdateRunspace.Dispose() }
+        $script:UpdatePs = $null
+        $script:UpdateRunspace = $null
+        $script:UpdateHandle = $null
+        $script:UpdateInProgress = $false
+        $miUpdate.Enabled = $true
+    }
+
+    $manual = $script:UpdateManual
+    $script:UpdateManual = $false
+
+    if (-not $outcome) {
+        if ($manual) { Show-KsoBalloon 'KeepSpicetifyOn' 'Could not check for updates. See the log.' ([System.Windows.Forms.ToolTipIcon]::Error) }
+        return
+    }
+
+    if (-not $outcome.Status.Checked) {
+        if ($manual) { Show-KsoBalloon 'KeepSpicetifyOn' 'Could not reach GitHub to check for updates.' ([System.Windows.Forms.ToolTipIcon]::Warning) }
+        return
+    }
+
+    if (-not $outcome.Status.Available) {
+        if ($manual) { Show-KsoBalloon 'KeepSpicetifyOn' "You're on the latest version (v$($outcome.Status.Local))." }
+        return
+    }
+
+    if ($outcome.Kind -eq 'Install' -and $outcome.Result.Updated) {
+        Show-KsoBalloon 'KeepSpicetifyOn updated' "Updated to v$($outcome.Result.NewVersion). Restarting..."
+        Write-KsoLog 'Restarting after update.'
+        Restart-KsoTray -DelaySeconds 5 | Out-Null
+        $timer.Stop()
+        $notify.Visible = $false
+        [System.Windows.Forms.Application]::Exit()
+        return
+    }
+
+    if ($outcome.Kind -eq 'Install') {
+        Show-KsoBalloon 'Update failed' $outcome.Result.Message ([System.Windows.Forms.ToolTipIcon]::Error)
+        return
+    }
+
+    Show-KsoBalloon 'Update available' "KeepSpicetifyOn v$($outcome.Status.Remote) is available. Use 'Check for updates' to install it." ([System.Windows.Forms.ToolTipIcon]::Info)
 }
 
 function Invoke-KsoCheck {
@@ -414,6 +522,15 @@ $miNotify.Add_Click({
     $miNotify.Checked = [bool]$script:Config.notifications
 })
 
+$miUpdate.Add_Click({ Start-KsoUpdateCheck -Manual })
+
+$miAutoUpdate.Add_Click({
+    $script:Config.autoUpdate = -not [bool]$script:Config.autoUpdate
+    Save-KsoConfig $script:Config
+    $miAutoUpdate.Checked = [bool]$script:Config.autoUpdate
+    Write-KsoLog "Automatic updates set to $($script:Config.autoUpdate)."
+})
+
 $miLog.Add_Click({
     $log = Get-KsoLogPath
     if (Test-Path -LiteralPath $log) {
@@ -471,6 +588,19 @@ $timer.Add_Tick({
             if ($script:RepairHandle -and $script:RepairHandle.IsCompleted) {
                 Complete-KsoRepair
             }
+            return
+        }
+
+        if ($script:UpdateInProgress) {
+            if ($script:UpdateHandle -and $script:UpdateHandle.IsCompleted) {
+                Complete-KsoUpdateCheck
+            }
+            return
+        }
+
+        $updateEvery = [double]$script:Config.updateCheckHours
+        if ($updateEvery -gt 0 -and ($now - $script:LastUpdateCheck).TotalHours -ge $updateEvery) {
+            Start-KsoUpdateCheck
             return
         }
 
@@ -533,6 +663,12 @@ try {
     }
     if ($script:RepairRunspace) {
         try { $script:RepairRunspace.Dispose() } catch { }
+    }
+    if ($script:UpdatePs) {
+        try { $script:UpdatePs.Dispose() } catch { }
+    }
+    if ($script:UpdateRunspace) {
+        try { $script:UpdateRunspace.Dispose() } catch { }
     }
 
     foreach ($sub in $script:WatcherEvents) {

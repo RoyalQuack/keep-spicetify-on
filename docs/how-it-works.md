@@ -135,6 +135,37 @@ Spotify was already running it is restarted minimised afterwards so it actually 
 the restored theme. This only applies at startup — during normal operation the
 `WaitForSpotifyExit` policy still refuses to interrupt playback.
 
+## Self-update
+
+Updates are gated on the `VERSION` file at the repo root, not on commits. That's
+deliberate: applying an update restarts the tray, which triggers the startup repair,
+which restarts Spotify. If every commit shipped, a README typo would interrupt someone's
+music. Push as much as you like; bump `VERSION` when you actually want it to go out.
+
+The check is a plain GET of `VERSION` from `raw.githubusercontent.com` and a numeric
+`[version]` comparison, so `1.10.0` correctly beats `1.9.0`.
+
+Installing does the following, and touches nothing until every check has passed:
+
+1. Download the branch ZIP to a temp folder.
+2. Extract it and confirm the tree really is KeepSpicetifyOn - `VERSION`, `install.ps1`,
+   `src/Core.ps1`, `src/KeepSpicetifyOn.ps1`, `src/Startup.ps1`, `src/launcher.vbs` must
+   all be present.
+3. Confirm the downloaded `VERSION` is genuinely newer than the local one.
+4. Copy over the install directory and unblock the scripts.
+5. Relaunch via `launcher.vbs` with a 5 second delay, then exit.
+
+The delay matters. The tray holds a `Global\KeepSpicetifyOn.Tray` mutex for
+single-instance behaviour, so a replacement started immediately would see itself as a
+duplicate and quit. The outgoing instance must exit and release it first.
+
+Settings survive updates because config and logs live in `%LOCALAPPDATA%`, never in the
+install directory. The install directory must be user-writable; the updater checks with
+a probe file and reports instead of failing halfway.
+
+Both the check and the install run on a background runspace, so a slow or unreachable
+network cannot freeze the tray.
+
 ## Running without the tray
 
 ```bash

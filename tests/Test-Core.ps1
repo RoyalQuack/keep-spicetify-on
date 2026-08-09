@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\src\Core.ps1')
+. (Join-Path $PSScriptRoot '..\src\Update.ps1')
 
 $script:Pass = 0
 $script:Fail = 0
@@ -104,6 +105,23 @@ if ($status.State -in @('Healthy', 'NeedsRepair')) {
         Assert-Equal $false ([bool]($spaText -match 'spicetify')) 'the backup archive is unpatched, so it is always a clean source'
     }
 }
+
+Write-Host ''
+Write-Host 'Self-update versioning' -ForegroundColor Cyan
+
+Assert-Equal ([version]'1.2.3') (ConvertTo-KsoVersion '1.2.3')        'parses a plain version'
+Assert-Equal ([version]'1.2.3') (ConvertTo-KsoVersion "1.2.3`n")      'ignores a trailing newline'
+Assert-Equal ([version]'1.2.3') (ConvertTo-KsoVersion '  v1.2.3  ')   'tolerates a v prefix and whitespace'
+Assert-Equal $null (ConvertTo-KsoVersion 'not-a-version')             'rejects rubbish'
+Assert-Equal $null (ConvertTo-KsoVersion '')                          'rejects empty'
+
+# Ordering must be numeric, not lexical: "1.10.0" is newer than "1.9.0" even
+# though it sorts earlier as a string.
+Assert-True ((ConvertTo-KsoVersion '1.10.0') -gt (ConvertTo-KsoVersion '1.9.0')) 'compares numerically, not as text'
+Assert-True ((ConvertTo-KsoVersion '2.0.0') -gt (ConvertTo-KsoVersion '1.99.99')) 'a major bump wins'
+
+$localVersion = Get-KsoLocalVersion
+Assert-True ($null -ne $localVersion) "the shipped VERSION file parses (v$localVersion)"
 
 Write-Host ''
 Write-Host 'Config' -ForegroundColor Cyan

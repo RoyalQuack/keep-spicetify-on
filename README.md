@@ -67,6 +67,18 @@ place. It's **off by default on purpose**: if you turn it on, you stop getting S
 updates and security fixes until you turn it back off. Most people should leave it off
 and just let the app fix things automatically.
 
+## Updates
+
+KeepSpicetifyOn keeps itself up to date. It checks once a day, installs anything new,
+and restarts itself — you don't have to re-download anything.
+
+Your current version is shown in the tray menu, and **Check for updates** looks right
+now. If you'd rather approve updates yourself, untick **Update automatically** and it
+will just tell you when one is available.
+
+> Already installed a version from before updates existed? You'll need to download the
+> ZIP once more. After that it'll keep itself current.
+
 ## Uninstall
 
 Double-click **`Uninstall.bat`** in the same folder.

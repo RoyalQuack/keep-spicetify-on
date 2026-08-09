@@ -20,6 +20,8 @@ function Get-KsoDefaultConfig {
         repairOnStartup      = $true
         blockSpotifyUpdates  = $false
         notifications        = $true
+        autoUpdate           = $true
+        updateCheckHours     = 24
     }
 }
 
